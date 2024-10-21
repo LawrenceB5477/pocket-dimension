@@ -1,0 +1,12 @@
+[package]
+name = "pocket-dimension"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gl = "0.6.0"
+glam = "0.29.0"
+tobj = "4.0.2"
+
+[dependencies.glfw]
+version = "*"
