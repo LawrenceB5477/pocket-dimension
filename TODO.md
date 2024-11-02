@@ -1,0 +1,15 @@
+- [X] load shaders from disk 
+- [X] draw points 
+- [X] draw rects
+- [X] draw lines 
+- [x] draw convex polygons
+- [X] camera
+- [X] cache polygons
+- [X] circles
+- [ ] draw text
+- [ ] load models 
+- [ ] textures 
+- [ ] sprite sheet 
+- [ ] load WAD file
+- [ ] phong shading
+- [ ] skybox

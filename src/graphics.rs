@@ -1,3 +1,7 @@
 pub mod render;
-pub mod vao;
-pub mod shader_program;
+pub mod program;
+pub mod shader;
+pub mod mesh;
+mod polygon;
+pub mod shape_builder;
+pub mod texture;

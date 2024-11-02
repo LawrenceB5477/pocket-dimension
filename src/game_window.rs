@@ -1,31 +1,31 @@
 use glfw::{Context, GlfwReceiver, Key, PWindow, WindowEvent, WindowHint};
+
+use crate::game::camera::Camera;
+use crate::game::key_listener::KeyListener;
+use crate::game::mouse_listener::MouseListener;
+use crate::game::scene::{MainScene, Scene};
 use crate::graphics::render::Renderer;
 
 const SCREEN_WIDTH: u32 = 1920;
 const SCREEN_HEIGHT: u32 = 1080;
 
 pub struct GameWindow {
-    glfw: Option<glfw::Glfw>,
-    window: Option<PWindow>,
-    events: Option<GlfwReceiver<(f64, WindowEvent)>>,
-    renderer: Option<Renderer>
+    glfw: glfw::Glfw,
+    window: PWindow,
+    events: GlfwReceiver<(f64, WindowEvent)>,
+
+    // Game info
+    renderer: Renderer,
+    scene: Box<dyn Scene>,
+    camera: Camera,
+    key_listener: KeyListener,
+    mouse_listener: MouseListener,
+
 }
 
 impl GameWindow {
     pub fn new() -> GameWindow {
-        GameWindow {
-            glfw: Some(glfw::init(glfw::fail_on_errors).unwrap()),
-            window: None,
-            events: None,
-            renderer: Some(Renderer::new())
-        }
-    }
-
-    pub fn create_window(&mut self) {
-        // TODO blow up if glfw is None
-
-        // Set window hints
-        let glfw = self.glfw.as_mut().unwrap();
+        let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
 
         glfw.window_hint(WindowHint::ContextVersion(3, 3));
         glfw.window_hint(WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
@@ -35,50 +35,90 @@ impl GameWindow {
         glfw.window_hint(WindowHint::Focused(true));
 
         // Create actual window
-        let (window, events) = glfw.create_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Hello, Triangle", glfw::WindowMode::Windowed).unwrap();
-        self.window = Some(window);
-        self.events = Some(events);
+        let (mut window, events) = glfw.create_window(
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT,
+            "Hello, Triangle",
+            glfw::WindowMode::Windowed)
+            .unwrap();
 
         // Set up polling
-        let window = self.window.as_mut().unwrap();
         window.make_current();
         window.set_key_polling(true);
         window.set_cursor_pos_polling(true);
-    }
+        window.set_cursor_mode(glfw::CursorMode::Disabled);
+        // glfw.set_swap_interval(glfw::SwapInterval::Sync(1));
 
-    pub fn init_renderer(&mut self) {
-        let window = self.window.as_mut().unwrap();
-        let renderer = self.renderer.as_mut().unwrap();
-        renderer.init(window);
-    }
-
-    pub fn run_loop(&mut self) {
-        let window = self.window.as_mut().unwrap();
-        let events = self.events.as_ref().unwrap();
-        let glfw = self.glfw.as_mut().unwrap();
-        let renderer = self.renderer.as_ref().unwrap();
-
-        while !window.should_close() {
-
-            // Polling
-            glfw.poll_events();
-            for (_, event) in glfw::flush_messages(&events) {
-                GameWindow::handle_window_event(window, event);
-            }
-
-            renderer.render();
-            window.swap_buffers();
+        let mut renderer = Renderer::new(&mut window);
+        let scene = Box::new(MainScene::new());
+        GameWindow {
+            glfw: glfw,
+            window: window,
+            events: events,
+            renderer: renderer,
+            scene: scene,
+            camera: Camera::new(),
+            key_listener: KeyListener::new(),
+            mouse_listener: MouseListener::new(),
         }
     }
 
-    fn handle_window_event(window: &mut PWindow,  event: WindowEvent) {
+    pub fn run_loop(&mut self) {
+        let mut last_time = self.glfw.get_time();
+        let frame_time = 1.0 / 60.0;
+        let mut elapsed_frames = 0.;
+
+        while !self.window.should_close() {
+            let now = self.glfw.get_time();
+            let mut delta_time_s = now - last_time;
+            elapsed_frames += (delta_time_s / frame_time).floor();
+            last_time = now;
+
+            // Polling
+            self.glfw.poll_events();
+            for (_, event) in glfw::flush_messages(&self.events) {
+                GameWindow::handle_window_event(&mut self.window,
+                                                event,
+                                                &mut self.key_listener,
+                                                &mut self.mouse_listener
+                );
+            }
+
+            // Perform update logic, ideally at 60 fps
+            while elapsed_frames >= 1.0 {
+                self.scene.update_fixed(&mut self.camera, &self.key_listener, &mut self.mouse_listener);
+                elapsed_frames -= 1.0;
+            }
+
+            // Clear screen
+            unsafe {
+                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            }
+
+            self.scene.draw(&self.camera, &mut self.renderer);
+
+            // Swap buffers
+            self.window.swap_buffers();
+        }
+    }
+
+    fn handle_window_event(window: &mut PWindow,
+                           event: WindowEvent,
+                           key_listener: &mut KeyListener,
+                           mouse_listener: &mut MouseListener
+    ) {
         match event {
-            glfw::WindowEvent::Key(Key::Escape, _, glfw::Action::Press, _) => {
+            // If escape
+            WindowEvent::Key(Key::Escape, _, glfw::Action::Press, _) => {
                 window.set_should_close(true)
-            },
-            glfw::WindowEvent::CursorPos(xpos, ypos) => {
-                // println!("Cursor position: ({}, {})", xpos, ypos);
-            },
+            }
+            // Any other key
+            WindowEvent::Key(key, _, event, _) => {
+                key_listener.handle_key_callback(key, event);
+            }
+            WindowEvent::CursorPos(xpos, ypos) => {
+                mouse_listener.mouse_pos_callback(xpos, ypos);
+            }
             _ => {}
         }
     }
